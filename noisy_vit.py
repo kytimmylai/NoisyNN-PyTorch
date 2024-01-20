@@ -44,41 +44,79 @@ class NoisyViT(VisionTransformer):
         self.linear_transform_noise = torch.nn.Parameter(linear_transform_noise, requires_grad=False)
 
     def forward_features(self, x: torch.Tensor) -> torch.Tensor:
-            if self.grad_checkpointing and not torch.jit.is_scripting():
-                return super().forward_features(x)
-            x = self.patch_embed(x)
-            x = self._pos_embed(x)
-            x = self.patch_drop(x)
-            x = self.norm_pre(x)
+        if self.grad_checkpointing and not torch.jit.is_scripting():
+            return super().forward_features(x)
+        
+        x = self.patch_embed(x)
+        x = self._pos_embed(x)
+        x = self.patch_drop(x)
+        x = self.norm_pre(x)
+        # Add noise only when training
+        if self.training:
+            x = self.blocks[:-1](x)
+            # Suppose the token dim = 1
+            token = x[:, 0, :].unsqueeze(1)
+            x = x[:, 1:, :].permute(0, 2, 1)
+            B, C, L = x.shape
+            x = x.reshape(B, C, self.stage3_res, self.stage3_res).contiguous()
+            x = self.linear_transform_noise@x + x
+            x = x.flatten(2).transpose(1, 2)
+            x = torch.cat([token, x], dim=1)
+            x = self.blocks[-1](x)
+        else:
+            x = self.blocks(x)
 
-            # Add noise only when training
-            if self.training:
-                x = self.blocks[:-1](x)
-                # Suppose the token dim = 1
-                token = x[:, 0, :].unsqueeze(1)
-                x = x[:, 1:, :].permute(0, 2, 1)
-                B, C, L = x.shape
-                x = x.reshape(B, C, self.stage3_res, self.stage3_res).contiguous()
-                x = self.linear_transform_noise@x + x
-                x = x.flatten(2).transpose(1, 2)
-                x = torch.cat([token, x], dim=1)
-                x = self.blocks[-1](x)
-            else:
-                x = self.blocks(x)
-            x = self.norm(x)
-            return x
-    
-    
-# Easy test
-if __name__ == '__main__':
+        x = self.norm(x)
+        return x
+
+# We don't specify more args because the paper didn't reveal more details
+def vit_t(optimal=True, res=224) -> NoisyViT:
     model = NoisyViT(
-        optimal=True, 
-        res=224, 
+        optimal=optimal, 
+        res=res, 
+        patch_size=16, 
+        embed_dim=192, 
+        depth=12, 
+        num_heads=3
+    )
+    return model
+
+def vit_s(optimal=True, res=224) -> NoisyViT:
+    model = NoisyViT(
+        optimal=optimal, 
+        res=res, 
+        patch_size=16, 
+        embed_dim=384, 
+        depth=12, 
+        num_heads=6
+    )
+    return model
+
+def vit_b(optimal=True, res=224) -> NoisyViT:
+    model = NoisyViT(
+        optimal=optimal, 
+        res=res, 
         patch_size=16, 
         embed_dim=768, 
         depth=12, 
         num_heads=12
-    ).cuda()
+    )
+    return model
+
+def vit_l(optimal=True, res=224) -> NoisyViT:
+    model = NoisyViT(
+        optimal=optimal, 
+        res=res, 
+        patch_size=16, 
+        embed_dim=1024, 
+        depth=24, 
+        num_heads=16
+    )
+    return model
+
+# Easy test
+if __name__ == '__main__':
+    model = vit_l().cuda()
     inputs = torch.rand((2, 3, 224, 224)).cuda()
     output = model(inputs)
     print('Pass')
