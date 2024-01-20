@@ -58,9 +58,9 @@ class NoisyViT(VisionTransformer):
             token = x[:, 0, :].unsqueeze(1)
             x = x[:, 1:, :].permute(0, 2, 1)
             B, C, L = x.shape
-            x = x.reshape(B, C, self.stage3_res, self.stage3_res).contiguous()
+            x = x.reshape(B, C, self.stage3_res, self.stage3_res)
             x = self.linear_transform_noise@x + x
-            x = x.flatten(2).transpose(1, 2)
+            x = x.flatten(2).transpose(1, 2).contiguous()
             x = torch.cat([token, x], dim=1)
             x = self.blocks[-1](x)
         else:
