@@ -51,20 +51,18 @@ class NoisyViT(VisionTransformer):
         x = self._pos_embed(x)
         x = self.patch_drop(x)
         x = self.norm_pre(x)
-        # Add noise only when training
-        if self.training:
-            x = self.blocks[:-1](x)
-            # Suppose the token dim = 1
-            token = x[:, 0, :].unsqueeze(1)
-            x = x[:, 1:, :].permute(0, 2, 1)
-            B, C, L = x.shape
-            x = x.reshape(B, C, self.stage3_res, self.stage3_res)
-            x = self.linear_transform_noise@x + x
-            x = x.flatten(2).transpose(1, 2).contiguous()
-            x = torch.cat([token, x], dim=1)
-            x = self.blocks[-1](x)
-        else:
-            x = self.blocks(x)
+        # Add noise when training/testing
+        # See https://openreview.net/forum?id=Ce0dDt9tUT for more detail
+        x = self.blocks[:-1](x)
+        # Suppose the token dim = 1
+        token = x[:, 0, :].unsqueeze(1)
+        x = x[:, 1:, :].permute(0, 2, 1)
+        B, C, L = x.shape
+        x = x.reshape(B, C, self.stage3_res, self.stage3_res)
+        x = self.linear_transform_noise@x + x
+        x = x.flatten(2).transpose(1, 2).contiguous()
+        x = torch.cat([token, x], dim=1)
+        x = self.blocks[-1](x)
 
         x = self.norm(x)
         return x

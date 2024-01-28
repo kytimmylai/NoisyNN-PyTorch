@@ -54,12 +54,12 @@ class NoisyResNet(ResNet):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        if self.training:
-            x = self.layer4[:-1](x)
-            x = self.linear_transform_noise@x + x
-            x = self.layer4[-1](x)
-        else:
-            x = self.layer4(x)
+
+        # Add noise when training/testing
+        # See https://openreview.net/forum?id=Ce0dDt9tUT for more detail
+        x = self.layer4[:-1](x)
+        x = self.linear_transform_noise@x + x
+        x = self.layer4[-1](x)
 
         return x
 
